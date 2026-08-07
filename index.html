@@ -367,7 +367,7 @@ function pshot(owner,x,y,vx,vy,dmg,type){
 function eshot(x,y,vx,vy,o){
   if (eshots.length > 1100) return;
   o = o || {};
-  eshots.push({x,y,vx,vy, r:o.r||5.5, col:o.col||'#ff5ae0', core:o.core||'#fff',
+  eshots.push({x,y,vx,vy, r:(o.r||5.5)*0.9, col:o.col||'#ff5ae0', core:o.core||'#fff',
     type:o.type||'ball', homing:o.homing||0, t:0, acc:o.acc||0, grz:false});
 }
 function eshotA(x,y,ang,sp,o){ eshot(x,y,Math.cos(ang)*sp,Math.sin(ang)*sp,o); }
@@ -528,7 +528,7 @@ function updatePlayer(p){
   }
   const mag = Math.hypot(dx,dy);
   if (mag > 1){ dx /= mag; dy /= mag; }      // 斜め移動が速くならないように
-  const sp = 3.6;
+  const sp = p.power >= 1 ? SPEED_FAST : SPEED_SLOW;
   p.x = clamp(p.x + dx*sp, 14, W-14);
   p.y = clamp(p.y + dy*sp, 26, H-16);
 
@@ -537,7 +537,7 @@ function updatePlayer(p){
   if (p.missileCd > 0) p.missileCd--;
   if (pDown(p,'shot') && p.fireCd <= 0){
     firePlayer(p);
-    p.fireCd = p.power >= 2 ? 5 : 6;
+    p.fireCd = p.power >= 3 ? 5 : 6;
   }
 
   // --- ボム ---
@@ -547,35 +547,27 @@ function updatePlayer(p){
   }
 }
 
-/* パワー段階（最大 P3）
-   0: レーザー1本
-   1: レーザー強化 ＋ 直進2発
-   2: ＋ 斜め2発 ＋ 左右オプション（連射も速くなる）
-   3: ＋ オプションの斜め撃ち ＋ ホーミングミサイル            */
-const MAX_POWER = 3;
+/* パワー段階（最大 P4）
+   0: 中央レーザー1本
+   1: ＋ 自機の移動速度アップ
+   2: ＋ 直進ショット2発
+   3: ＋ 斜めショット2発（連射も速くなる）
+   4: 中央レーザー強化                          */
+const MAX_POWER    = 4;
+const SPEED_SLOW   = 3.6;   // P0
+const SPEED_FAST   = 4.6;   // P1 以上
 function firePlayer(p){
   SFX.shot();
   const lv = p.power, x = p.x, y = p.y - 14;
-  // 中央レーザー：最初からこれ1本。レベル1で強化される
-  pshot(p, x, y-6, 0, -15, lv >= 1 ? 6 : 4, 'big');
-  if (lv >= 1){
-    pshot(p, x-10, y+2, 0, -13, 2, 'n');
-    pshot(p, x+10, y+2, 0, -13, 2, 'n');
-  }
+  // 中央レーザー：最初からこれ1本。P4 で大幅に強化される
+  pshot(p, x, y-6, 0, -15, lv >= 4 ? 12 : (lv >= 2 ? 6 : 5), 'big');
   if (lv >= 2){
-    pshot(p, x-16, y+5, -0.9, -12.6, 2, 'n');
-    pshot(p, x+16, y+5,  0.9, -12.6, 2, 'n');
-    pshot(p, x-22, y+8, 0, -13, 2, 'n');
-    pshot(p, x+22, y+8, 0, -13, 2, 'n');
+    pshot(p, x-10, y+2, 0, -13, 4, 'n');
+    pshot(p, x+10, y+2, 0, -13, 4, 'n');
   }
   if (lv >= 3){
-    pshot(p, x-22, y+8, -2.6, -12.4, 2, 'n');
-    pshot(p, x+22, y+8,  2.6, -12.4, 2, 'n');
-    if (p.missileCd <= 0){
-      p.missileCd = 10;
-      pshot(p, x-26, y+10, -2.2, -6, 6, 'm');
-      pshot(p, x+26, y+10,  2.2, -6, 6, 'm');
-    }
+    pshot(p, x-17, y+5, -0.9, -12.6, 4, 'n');
+    pshot(p, x+17, y+5,  0.9, -12.6, 4, 'n');
   }
 }
 
@@ -685,15 +677,6 @@ function drawPlayer(p){
   // キャノピー
   ctx.fillStyle = p.col;
   ctx.beginPath(); ctx.ellipse(0,-6,3,6,0,0,TAU); ctx.fill();
-  // オプション（パワー2以上）
-  if (p.power >= 2){
-    ctx.fillStyle = p.col2;
-    const ox = 22, oy = 8 + Math.sin(p.t*0.1)*2;
-    for (const s of [-1,1]){
-      ctx.beginPath(); ctx.ellipse(s*ox, oy, 4.5, 6.5, 0,0,TAU); ctx.fill();
-      ctx.fillStyle = p.col; ctx.fillRect(s*ox-1.5, oy-8, 3, 4); ctx.fillStyle = p.col2;
-    }
-  }
   ctx.restore();
 
   // 当たり判定コア
@@ -765,7 +748,7 @@ function damageEnemy(e, dmg, from, byFuse){
     // 機雷は時間切れで自爆したときだけ弾を撒く（撃ち落とせば安全）
     if (e.kind === 'mine' && byFuse) ringShot(e.x,e.y, 10, 2.4*bulSp, rand(0,TAU), {col:'#ffe066', r:5});
     if (e.drop) dropItem(e.x, e.y, e.drop);
-    else if (Math.random() < 0.14) dropItem(e.x, e.y, pick(['S','S','B','P']));
+    else if (Math.random() < 0.07) dropItem(e.x, e.y, pick(['S','S','B','P']));
   } else SFX.hit();
 }
 
@@ -1013,7 +996,7 @@ function updateBoss(){
     if (boss.dieT === 130){
       boom(boss.x, boss.y, 5, '#fff'); SFX.huge(); flash = 1.0; flashCol='#fff'; shake = 22;
       for (const p of players) if (p.playing && p.lives >= 0) p.score += boss.def.bonus;
-      for (let i=0;i<6;i++) dropItem(boss.x + rand(-60,60), boss.y, pick(['P','B','S','S']));
+      for (let i=0;i<3;i++) dropItem(boss.x + rand(-60,60), boss.y, pick(['P','B','S','S']));
     }
     if (boss.dieT > 190){ boss = null; stageCleared(); }
   }
@@ -1557,11 +1540,11 @@ function updateBG(){
 function drawBG(idx){
   if (idx === 0){
     const g = ctx.createLinearGradient(0,0,0,H);
-    g.addColorStop(0,'#06264f'); g.addColorStop(0.45,'#1d5f9c'); g.addColorStop(1,'#5aa2ca');
+    g.addColorStop(0,'#03142c'); g.addColorStop(0.45,'#0f3457'); g.addColorStop(1,'#255273');
     ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
     for (const p of bgProps){
-      ctx.globalAlpha = p.a*0.8;
-      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = p.a*0.55;
+      ctx.fillStyle = '#8fa6bd';
       const s = p.s;
       ctx.beginPath();
       ctx.ellipse(p.x, p.y, 42*s, 15*s, 0,0,TAU); ctx.fill();
@@ -1571,7 +1554,7 @@ function drawBG(idx){
     ctx.globalAlpha = 1;
   } else if (idx === 1){
     const g = ctx.createLinearGradient(0,0,0,H);
-    g.addColorStop(0,'#012036'); g.addColorStop(0.5,'#04456e'); g.addColorStop(1,'#0a6f9c');
+    g.addColorStop(0,'#01121e'); g.addColorStop(0.5,'#022840'); g.addColorStop(1,'#054259');
     ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
     // 波（島より奥）
     ctx.strokeStyle='rgba(255,255,255,0.14)'; ctx.lineWidth=2;
@@ -1678,7 +1661,7 @@ function evt(t, f){ return {t, f}; }
 const arcX = (i,n,cx,sp) => cx + (i-(n-1)/2)*sp;
 
 const STAGES = [
-  { name:'第1面', title:'蒼空突破', bgm:'st1', speed:1.6, bossAt:2760, dens:0.50,
+  { name:'第1面', title:'蒼空突破', bgm:'st1', speed:1.6, bossAt:2760, dens:0.50, dim:0.26,
     script:[
       // 導入：撃つ敵を出さず、動きと自機の火力に慣れてもらう
       evt(80,  ()=> wave('pop', 5, 18, i=>105+i*22, {vy:2.3})),
@@ -1703,7 +1686,7 @@ const STAGES = [
       evt(2480,()=> wave('pop', 10, 10, i=>40+((i*67)%(W-80)), {vy:3.1})),
     ]},
 
-  { name:'第2面', title:'蒼海の防衛線', bgm:'st2', speed:2.0, bossAt:2880, dens:0.68,
+  { name:'第2面', title:'蒼海の防衛線', bgm:'st2', speed:2.0, bossAt:2880, dens:0.68, dim:0.22,
     script:[
       evt(70,  ()=> wave('pop', 8, 13, i=>arcX(i,8,W/2,44), {vy:3.0})),
       evt(260, ()=> { spawn('sniper', -30, -20, {sx:1}); spawn('sniper', W+30, -20, {sx:-1}); }),
@@ -1722,7 +1705,7 @@ const STAGES = [
       evt(2640,()=> spawn('heavy', W/2, -40, {})),
     ]},
 
-  { name:'第3面', title:'紅蓮の峡谷', bgm:'st3', speed:2.4, bossAt:2940, dens:0.85,
+  { name:'第3面', title:'紅蓮の峡谷', bgm:'st3', speed:2.4, bossAt:2940, dens:0.85, dim:0.18,
     script:[
       evt(70,  ()=> wave('zig', 8, 15, i=>arcX(i,8,W/2,42), {vy:2.1, mk:(o,i)=>o.ph=i*0.45})),
       evt(280, ()=> wave('mine', 6, 22, i=>60+i*(W-120)/5, {vy:2.2, fuse:280})),
@@ -1741,7 +1724,7 @@ const STAGES = [
       evt(2780,()=> spawn('heavy', W/2, -40, {})),
     ]},
 
-  { name:'第4面', title:'夜間都市強襲', bgm:'st4', speed:2.2, bossAt:3000, dens:0.95,
+  { name:'第4面', title:'夜間都市強襲', bgm:'st4', speed:2.2, bossAt:3000, dens:0.95, dim:0.12,
     script:[
       evt(70,  ()=> wave('dive', 6, 20, i=>arcX(i,6,W/2,66), {})),
       evt(250, ()=> { spawn('turret', 80,-30,{ty:110}); spawn('turret', W-80,-30,{ty:110}); }),
@@ -1760,7 +1743,7 @@ const STAGES = [
       evt(2840,()=> wave('pop', 22, 6, i=>40+((i*79)%(W-80)), {vy:4.2, shoot:true})),
     ]},
 
-  { name:'第5面', title:'最終要塞 オメガ', bgm:'st5', speed:2.8, bossAt:3120, dens:1.00,
+  { name:'第5面', title:'最終要塞 オメガ', bgm:'st5', speed:2.8, bossAt:3120, dens:1.00, dim:0.08,
     script:[
       evt(60,  ()=> wave('pop', 20, 6, i=>40+((i*103)%(W-80)), {vy:4.2, shoot:true})),
       evt(300, ()=> { spawn('turret', 80,-30,{ty:110}); spawn('turret', W/2,-30,{ty:160}); spawn('turret', W-80,-30,{ty:110}); }),
@@ -2407,6 +2390,9 @@ function render(){
     drawEnding();
   } else {
     drawBG(stageIndex);
+    // 自機・敵・弾を見やすくするため背景を少し暗く落とす
+    ctx.fillStyle = 'rgba(0,3,10,' + (STAGES[stageIndex].dim || 0) + ')';
+    ctx.fillRect(0,0,W,H);
     drawItems();
     for (const e of enemies) e.k.draw(e);
     drawBoss();
