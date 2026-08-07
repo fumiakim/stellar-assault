@@ -419,7 +419,7 @@ function updateItems(){
 }
 function takeItem(p, type){
   if (type === 'P'){
-    if (p.power < 5){ p.power++; SFX.power(); p.msg='POWER UP!'; p.msgT=70; }
+    if (p.power < MAX_POWER){ p.power++; SFX.power(); p.msg='POWER UP!'; p.msgT=70; }
     else { p.score += 3000; SFX.power(); }
   } else if (type === 'B'){
     if (p.bombs < 6){ p.bombs++; SFX.bombitem(); p.msg='BOMB +1'; p.msgT=70; }
@@ -537,7 +537,7 @@ function updatePlayer(p){
   if (p.missileCd > 0) p.missileCd--;
   if (pDown(p,'shot') && p.fireCd <= 0){
     firePlayer(p);
-    p.fireCd = p.power >= 4 ? 5 : 6;
+    p.fireCd = p.power >= 2 ? 5 : 6;
   }
 
   // --- ボム ---
@@ -547,15 +547,17 @@ function updatePlayer(p){
   }
 }
 
-/* パワー段階
-   0: レーザー1本            3: レーザー強化
-   1: ＋2way                4: ＋オプション（左右）
-   2: ＋斜め2way            5: ＋オプション斜撃ち＋ホーミングミサイル */
+/* パワー段階（最大 P3）
+   0: レーザー1本
+   1: レーザー強化 ＋ 直進2発
+   2: ＋ 斜め2発 ＋ 左右オプション（連射も速くなる）
+   3: ＋ オプションの斜め撃ち ＋ ホーミングミサイル            */
+const MAX_POWER = 3;
 function firePlayer(p){
   SFX.shot();
   const lv = p.power, x = p.x, y = p.y - 14;
-  // 中央レーザー：最初からこれ1本。レベル3で強化される
-  pshot(p, x, y-6, 0, -15, lv >= 3 ? 6 : 4, 'big');
+  // 中央レーザー：最初からこれ1本。レベル1で強化される
+  pshot(p, x, y-6, 0, -15, lv >= 1 ? 6 : 4, 'big');
   if (lv >= 1){
     pshot(p, x-10, y+2, 0, -13, 2, 'n');
     pshot(p, x+10, y+2, 0, -13, 2, 'n');
@@ -563,12 +565,10 @@ function firePlayer(p){
   if (lv >= 2){
     pshot(p, x-16, y+5, -0.9, -12.6, 2, 'n');
     pshot(p, x+16, y+5,  0.9, -12.6, 2, 'n');
-  }
-  if (lv >= 4){
     pshot(p, x-22, y+8, 0, -13, 2, 'n');
     pshot(p, x+22, y+8, 0, -13, 2, 'n');
   }
-  if (lv >= 5){
+  if (lv >= 3){
     pshot(p, x-22, y+8, -2.6, -12.4, 2, 'n');
     pshot(p, x+22, y+8,  2.6, -12.4, 2, 'n');
     if (p.missileCd <= 0){
@@ -637,7 +637,7 @@ function playerHitCheck(p){
 function killPlayer(p){
   p.alive = false;
   p.lives--;
-  p.power = Math.max(0, p.power - 2);
+  p.power = Math.max(0, p.power - 1);
   p.respawn = 70;
   SFX.death();
   boom(p.x, p.y, 1.6, p.col);
@@ -685,8 +685,8 @@ function drawPlayer(p){
   // キャノピー
   ctx.fillStyle = p.col;
   ctx.beginPath(); ctx.ellipse(0,-6,3,6,0,0,TAU); ctx.fill();
-  // オプション（パワー4以上）
-  if (p.power >= 4){
+  // オプション（パワー2以上）
+  if (p.power >= 2){
     ctx.fillStyle = p.col2;
     const ox = 22, oy = 8 + Math.sin(p.t*0.1)*2;
     for (const s of [-1,1]){
@@ -1079,9 +1079,28 @@ function drawBeams(){
 /* ============================================================
    8. ボス定義（全5面）
    ============================================================ */
-function bossMove(b, amp, spd, base){
-  b.x = W/2 + Math.sin(b.t*spd)*amp;
-  if (base !== undefined) b.y = base + Math.sin(b.t*spd*0.7)*8;
+/* ボスの左右移動。
+   位相を積算するのでフェーズが変わって速度・振幅が変わっても位置が連続し、
+   さらに 1フレームの移動量に上限を設けるので、どんな状態からでも瞬間移動しない。 */
+const BOSS_MAX_SPEED = 4.2;
+function bossMove(b, amp, spd, base, ampY, spdY){
+  if (b.mph === undefined){
+    b.mph = 0; b.mphY = 0;
+    b.amp = amp; b.ampY = (ampY === undefined ? 8 : ampY);
+    b.baseY = (base === undefined ? b.y : base);
+  }
+  b.mph  += spd;
+  b.mphY += (spdY === undefined ? spd*0.7 : spdY);
+  // 振幅・中心はゆっくり追従させる（切り替わりを目立たせない）
+  b.amp  += clamp(amp - b.amp, -0.8, 0.8);
+  b.ampY += clamp((ampY === undefined ? 8 : ampY) - b.ampY, -0.3, 0.3);
+  const tx = W/2 + Math.sin(b.mph) * b.amp;
+  b.x += clamp(tx - b.x, -BOSS_MAX_SPEED, BOSS_MAX_SPEED);
+  if (base !== undefined){
+    b.baseY += clamp(base - b.baseY, -0.5, 0.5);
+    const ty = b.baseY + Math.sin(b.mphY) * b.ampY;
+    b.y += clamp(ty - b.y, -BOSS_MAX_SPEED, BOSS_MAX_SPEED);
+  }
 }
 
 /* --- 1面：大型爆撃機 ヴァルキリー --- */
@@ -1245,8 +1264,7 @@ const BOSS3 = {
   },
   phases:[
     { until:0.66, run(b,t){
-        b.x = W/2 + Math.sin(b.t*0.013)*130;
-        b.y = 150 + Math.sin(b.t*0.02)*18;
+        bossMove(b, 130, 0.013, 150, 18, 0.02);
         if (fireAt(t, 76, 20)) ringShot(b.x, b.y, 22, 2.6*bulSp, b.t*0.11, {col:'#ffd166'});
         if (fireAt(t, 76, 50)) fan(b.x, b.y+40, aimAng(b.x,b.y), 4, 0.20, 3.6*bulSp, {col:'#ff9a3b'});
         if (fireAt(t, 200, 150)) for (const s of [-1,1]) spawn('mine', b.x+s*50, b.y+40, {vy:2.0, vx:s*0.7, fuse:200});
@@ -1264,14 +1282,14 @@ const BOSS3 = {
           if (fireAt(cyc, 6, 0)) spawn('mine', b.x+rand(-30,30), b.y-30, {vy:1.2, vx:rand(-1,1), fuse:140});
           if (b.y > H-120) b.y = H-120;
         } else {
-          b.y += (150 - b.y)*0.07;
+          // 突進後の復帰。突進本体(11px/F)より速く見えないよう上限をかける
+          b.y += clamp((150 - b.y)*0.07, -8, 8);
           b.x += Math.sin(b.t*0.03)*2.4;
           if (fireAt(cyc, 30, 0)) ringShot(b.x,b.y, 16, 2.4*bulSp, rand(0,TAU), {col:'#ffd166'});
         }
       }},
     { until:0, run(b,t){
-        b.x = W/2 + Math.sin(b.t*0.021)*140;
-        b.y = 140 + Math.sin(b.t*0.031)*24;
+        bossMove(b, 140, 0.021, 140, 24, 0.031);
         // 3本の螺旋
         if (fireAt(t, 3, 0)){
           const a = b.t*0.13;
@@ -1427,8 +1445,7 @@ const BOSS5 = {
         if (!b.sats){
           b.sats = [0,1,2,3].map(i => ({a: i*TAU/4, r:135, alive:true, hp:Math.round(620*bossScale), flash:0}));
         }
-        b.x = W/2 + Math.sin(b.t*0.010)*95;
-        b.y = 170 + Math.sin(b.t*0.014)*12;
+        bossMove(b, 95, 0.010, 170, 12, 0.014);
         for (const s of b.sats){ s.a += 0.016; if (s.flash>0) s.flash--; }
         const live = b.sats.filter(s=>s.alive);
         if (fireAt(t, 60, 20)) for (const s of live){
@@ -1438,8 +1455,7 @@ const BOSS5 = {
         if (fireAt(t, 130, 70)) ringShot(b.x,b.y, 24, 2.6*bulSp, b.t*0.04, {col:'#7fb8ff'});
       }},
     { until:0.46, run(b,t){
-        b.x = W/2 + Math.sin(b.t*0.014)*115;
-        b.y = 165 + Math.sin(b.t*0.02)*16;
+        bossMove(b, 115, 0.014, 165, 16, 0.02);
         if (b.sats) for (const s of b.sats){ s.a += 0.03; if (s.flash>0) s.flash--; }
         // 二重螺旋
         if (fireAt(t, 3, 0)){
@@ -1453,8 +1469,7 @@ const BOSS5 = {
         if (fireAt(t, 96, 40)) fan(b.x,b.y+40, aimAng(b.x,b.y), 7, 0.15, 3.9*bulSp, {col:'#fff0a8'});
       }},
     { until:0.22, run(b,t){
-        b.x = W/2 + Math.sin(b.t*0.018)*130;
-        b.y = 160 + Math.sin(b.t*0.026)*20;
+        bossMove(b, 130, 0.018, 160, 20, 0.026);
         if (b.sats) for (const s of b.sats){ s.a += 0.045; if (s.flash>0) s.flash--; }
         // 上空からのカーテン
         if (fireAt(t, 14, 0)){
@@ -1472,8 +1487,7 @@ const BOSS5 = {
       }},
     { until:0, run(b,t){
         // 最終形態
-        b.x = W/2 + Math.sin(b.t*0.023)*140;
-        b.y = 155 + Math.sin(b.t*0.033)*24;
+        bossMove(b, 140, 0.023, 155, 24, 0.033);
         if (b.sats) for (const s of b.sats){ s.a += 0.06; if (s.flash>0) s.flash--; }
         if (fireAt(t, 3, 0)){
           const a = b.t*0.17;
@@ -1941,9 +1955,9 @@ function drawShots(){
     const c = s.owner.col;
     if (s.type === 'big'){
       ctx.fillStyle = c; ctx.globalAlpha=0.8;
-      ctx.fillRect(s.x-4.5, s.y-14, 9, 26);
+      ctx.fillRect(s.x-3.2, s.y-14, 6.4, 26);
       ctx.globalAlpha=1; ctx.fillStyle='#fff';
-      ctx.fillRect(s.x-1.4, s.y-11, 2.8, 20);
+      ctx.fillRect(s.x-1.0, s.y-11, 2.0, 20);
     } else if (s.type === 'm'){
       ctx.fillStyle = c; ctx.globalAlpha=0.8;
       const a = Math.atan2(s.vy,s.vx);
