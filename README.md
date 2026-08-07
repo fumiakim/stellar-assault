@@ -119,38 +119,29 @@ open index.html
 - ボス撃破ボーナス＝ 50,000〜250,000（面が進むほど高い）
 - 全面クリア時、コンティニュー0回なら評価 **S**
 
-## グラフィック素材
+## グラフィック
 
-自機の絵は [Replicate](https://replicate.com) の `black-forest-labs/flux-schnell` で生成しました。
+**全編ドット絵です。** 内部的に 192×256 の低解像度バッファへ描き、
+ニアレストネイバーで拡大しているので、弾や爆発まで含めて画面全体のドットの大きさが揃います。
+ゲームロジックの座標系は 480×640 のままなので、当たり判定や難易度の調整はそのまま維持されています。
 
-| ファイル | 内容 |
-|---|---|
-| `art/p1-a0.png` 〜 `p1-a3.png` | 生成された4案（1024×1024） |
-| `art/p1-contact.png` | 4案の比較シート（原画とゲーム内サイズ） |
-| `art/ship-1p.png` | 採用した A案から作った透過スプライト（256×158） |
-| `art/make-sprite.py` | `p1-a0.png` から `ship-1p.png` を作り直すスクリプト |
+- 自機は 16×16。雑魚敵は 10×10 〜 20×16。
+- スプライトは文字列の配列（1文字＝1ドット、`.` が透明）としてコード内に持っています。
+  外部ファイル不要で、1ドット単位で狙って直せます。設計データは [`art/pixel/`](art/pixel/) にあります。
+- 2P機は同じスプライトのパレットを差し替えただけ（青→橙）。
+- ボス5体・背景・爆発は、整数座標の矩形（`rct` / `disc` / `oval`）を組み合わせて描いています。
+- 英数字は自作の 5×7 ドットフォント。日本語だけは重ねた高解像度レイヤー（`#ov`）に描いて
+  読みやすさを保っています。
 
-- 2P機は同じ画像の**色相だけを差し替えて**オレンジにしています（Canvas の `hue` 合成）。
-  白い機体はそのままで、青い翼だけがオレンジになります。
-- エンジンの炎はスプライトに焼き込まず、これまでどおり毎フレーム揺らして描いています。
-- **`art/ship-1p.png` が読み込めない場合は、従来の Canvas パス描画に自動でフォールバック**します。
-  `index.html` を単体で持ち出しても、絵は素朴になりますがゲームは問題なく動きます。
+`art/` 直下に残っている PNG は、以前 Replicate（`black-forest-labs/flux-schnell`）で
+生成した自機の絵です。**現在は使っていません**が、参考として残しています。
+画像生成AIは「ドット絵風」は作れても本物のドット絵は作れないため、
+16×16のような小さいスプライトは手で打つ方が確実でした。
 
-生成に使ったプロンプト（要点）:
+## 技術メモ## 技術メモ
 
-> Top-down view of a small futuristic fighter spacecraft seen from directly above,
-> nose pointing straight up, perfectly bilaterally symmetrical, swept-back delta wings,
-> glossy white hull with deep blue wing panels, glowing cyan cockpit canopy,
-> twin cyan engine flames trailing downward, retro arcade vertical shoot-em-up game sprite,
-> bold clean silhouette, crisp hard edges, flat even lighting, centered,
-> isolated on pure flat black background
-
-背景を純黒にしておくと、外周からのフラッドフィルで確実に切り抜けます（AIの背景除去は炎のグローを削りがちなため）。
-
-## 技術メモ
-
-- 単一ファイル（`index.html`、約2,300行）。ビルド不要・依存なし。
-- 論理解像度 480×640 を CSS transform でウィンドウに合わせて拡大。
+- 単一ファイル（`index.html`）。ビルド不要・依存なし・外部素材なし。
+- 描画は 192×256、ロジックは 480×640。表示は整数倍を優先して拡大（ドットの大きさを揃えるため）。
 - 固定タイムステップ 60fps（1フレームあたり最大4回まで追いつき処理）。
 - BGM は WebAudio のオシレータによるコード進行ベースの簡易シーケンサ、効果音もすべて合成。
-- 背景は5面それぞれ手続き的に描画（雲・海と島・峡谷・夜の街・宇宙要塞）。
+- 背景は5面それぞれ手続き的に描画（雲・海と島・峡谷・夜の街・宇宙要塞）。すべて整数座標。
