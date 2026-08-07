@@ -449,6 +449,61 @@ function drawItems(){
 }
 
 /* ============================================================
+   4.5 自機スプライト（外部画像）
+   art/ship-1p.png を読み込んで自機の絵に使う。
+   読み込めなかった場合はこれまでどおり Canvas のパスで描くので、
+   index.html 単体でもゲームは動く。
+   ============================================================ */
+let shipImg = null, shipImg2P = null;
+
+// 元画像の色相だけを差し替える（白い機体はそのまま、青い翼だけが変わる）
+function tintSprite(img, color){
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth; c.height = img.naturalHeight;
+  const x = c.getContext('2d');
+  x.drawImage(img, 0, 0);
+  x.globalCompositeOperation = 'hue';
+  if (x.globalCompositeOperation === 'hue'){
+    x.fillStyle = color; x.fillRect(0, 0, c.width, c.height);
+  } else {                       // hue 合成に非対応のブラウザ向け
+    x.globalCompositeOperation = 'source-atop';
+    x.globalAlpha = 0.5; x.fillStyle = color;
+    x.fillRect(0, 0, c.width, c.height); x.globalAlpha = 1;
+  }
+  x.globalCompositeOperation = 'destination-in';   // 元の透過を復元
+  x.drawImage(img, 0, 0);
+  return c;
+}
+(function loadShipSprite(){
+  const img = new Image();
+  img.onload = () => {
+    shipImg = img;
+    try { shipImg2P = tintSprite(img, '#ff7a1a'); } catch(e){ shipImg2P = img; }
+  };
+  img.onerror = () => { shipImg = null; };
+  img.src = 'art/ship-1p.png';
+})();
+// 自機の絵を描く（スプライトがあれば画像、なければ従来のベクター）
+const SHIP_W = 48;
+function drawShipArt(p, c){
+  const spr = p.id === 0 ? shipImg : (shipImg2P || shipImg);
+  if (spr){
+    const w = SHIP_W, h = w * spr.height / spr.width;
+    c.drawImage(spr, -w/2, -h/2 - 3, w, h);
+    return;
+  }
+  c.fillStyle = '#e8f2ff';
+  c.beginPath();
+  c.moveTo(0,-17); c.lineTo(6,-2); c.lineTo(5,10); c.lineTo(-5,10); c.lineTo(-6,-2);
+  c.closePath(); c.fill();
+  c.fillStyle = p.col2;
+  c.beginPath(); c.moveTo(-6,-1); c.lineTo(-19,9); c.lineTo(-17,13); c.lineTo(-5,10); c.closePath(); c.fill();
+  c.beginPath(); c.moveTo(6,-1); c.lineTo(19,9); c.lineTo(17,13); c.lineTo(5,10); c.closePath(); c.fill();
+  c.fillStyle = p.col;
+  c.beginPath(); c.ellipse(0,-6,3,6,0,0,TAU); c.fill();
+}
+
+/* ============================================================
    5. 自機
    ============================================================ */
 function makePlayer(id){
@@ -652,31 +707,16 @@ function drawPlayer(p){
 
   ctx.save();
   ctx.translate(p.x, p.y);
-  // エンジン炎
-  const fl = 8 + Math.random()*7;
+  // エンジン炎（スプライトには焼き込まず、ここで毎フレーム揺らす）
+  const fl = 9 + Math.random()*8;
   ctx.globalCompositeOperation = 'lighter';
-  const g = ctx.createLinearGradient(0,8,0,8+fl);
+  const g = ctx.createLinearGradient(0,10,0,10+fl);
   g.addColorStop(0, p.col); g.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = g;
-  ctx.beginPath(); ctx.moveTo(-5,8); ctx.lineTo(5,8); ctx.lineTo(0,8+fl); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-5,10); ctx.lineTo(5,10); ctx.lineTo(0,10+fl); ctx.closePath(); ctx.fill();
   ctx.globalCompositeOperation = 'source-over';
 
-  // 機体
-  ctx.fillStyle = '#e8f2ff';
-  ctx.beginPath();
-  ctx.moveTo(0,-17); ctx.lineTo(6,-2); ctx.lineTo(5,10); ctx.lineTo(-5,10); ctx.lineTo(-6,-2);
-  ctx.closePath(); ctx.fill();
-  // 主翼
-  ctx.fillStyle = p.col2;
-  ctx.beginPath();
-  ctx.moveTo(-6,-1); ctx.lineTo(-19,9); ctx.lineTo(-17,13); ctx.lineTo(-5,10);
-  ctx.closePath(); ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(6,-1); ctx.lineTo(19,9); ctx.lineTo(17,13); ctx.lineTo(5,10);
-  ctx.closePath(); ctx.fill();
-  // キャノピー
-  ctx.fillStyle = p.col;
-  ctx.beginPath(); ctx.ellipse(0,-6,3,6,0,0,TAU); ctx.fill();
+  drawShipArt(p, ctx);
   ctx.restore();
 
   // 当たり判定コア
@@ -2253,11 +2293,7 @@ function drawEnding(){
     g.addColorStop(0,p.col); g.addColorStop(1,'rgba(0,0,0,0)');
     ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(-5,8); ctx.lineTo(5,8); ctx.lineTo(0,30+Math.random()*10); ctx.closePath(); ctx.fill();
     ctx.globalCompositeOperation='source-over';
-    ctx.fillStyle='#e8f2ff';
-    ctx.beginPath(); ctx.moveTo(0,-17); ctx.lineTo(6,-2); ctx.lineTo(5,10); ctx.lineTo(-5,10); ctx.lineTo(-6,-2); ctx.closePath(); ctx.fill();
-    ctx.fillStyle=p.col2;
-    ctx.beginPath(); ctx.moveTo(-6,-1); ctx.lineTo(-19,9); ctx.lineTo(-17,13); ctx.lineTo(-5,10); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(6,-1); ctx.lineTo(19,9); ctx.lineTo(17,13); ctx.lineTo(5,10); ctx.closePath(); ctx.fill();
+    drawShipArt(p, ctx);
     ctx.restore();
   }
   // スクロールテキスト（スコア表示が出る前にフェードアウト）

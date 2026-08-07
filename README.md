@@ -115,6 +115,34 @@ open index.html
 - ボス撃破ボーナス＝ 50,000〜250,000（面が進むほど高い）
 - 全面クリア時、コンティニュー0回なら評価 **S**
 
+## グラフィック素材
+
+自機の絵は [Replicate](https://replicate.com) の `black-forest-labs/flux-schnell` で生成しました。
+
+| ファイル | 内容 |
+|---|---|
+| `art/p1-a0.png` 〜 `p1-a3.png` | 生成された4案（1024×1024） |
+| `art/p1-contact.png` | 4案の比較シート（原画とゲーム内サイズ） |
+| `art/ship-1p.png` | 採用した A案から作った透過スプライト（256×158） |
+| `art/make-sprite.py` | `p1-a0.png` から `ship-1p.png` を作り直すスクリプト |
+
+- 2P機は同じ画像の**色相だけを差し替えて**オレンジにしています（Canvas の `hue` 合成）。
+  白い機体はそのままで、青い翼だけがオレンジになります。
+- エンジンの炎はスプライトに焼き込まず、これまでどおり毎フレーム揺らして描いています。
+- **`art/ship-1p.png` が読み込めない場合は、従来の Canvas パス描画に自動でフォールバック**します。
+  `index.html` を単体で持ち出しても、絵は素朴になりますがゲームは問題なく動きます。
+
+生成に使ったプロンプト（要点）:
+
+> Top-down view of a small futuristic fighter spacecraft seen from directly above,
+> nose pointing straight up, perfectly bilaterally symmetrical, swept-back delta wings,
+> glossy white hull with deep blue wing panels, glowing cyan cockpit canopy,
+> twin cyan engine flames trailing downward, retro arcade vertical shoot-em-up game sprite,
+> bold clean silhouette, crisp hard edges, flat even lighting, centered,
+> isolated on pure flat black background
+
+背景を純黒にしておくと、外周からのフラッドフィルで確実に切り抜けます（AIの背景除去は炎のグローを削りがちなため）。
+
 ## 技術メモ
 
 - 単一ファイル（`index.html`、約2,300行）。ビルド不要・依存なし。
