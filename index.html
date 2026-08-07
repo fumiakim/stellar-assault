@@ -27,7 +27,7 @@
 </head>
 <body>
 <div id="wrap"><canvas id="cv" width="480" height="640"></canvas></div>
-<div id="hint">1P: WASD 移動 / Space ショット / Q・左Shift ボム　　2P: 矢印キー 移動 / Enter・テンキー0 ショット / ／・右Shift ボム　　P 一時停止 / M 音量</div>
+<div id="hint">1P: WASD 移動 / Space ショット / Q・左Shift ボム（ゲームパッド対応）　　2P: 矢印キー 移動 / Enter・テンキー0 ショット / ／・右Shift ボム　　P 一時停止 / M 音量</div>
 <script>
 'use strict';
 (function () {
@@ -91,7 +91,67 @@ window.addEventListener('blur',   () => { held.clear(); if (state==='play') paus
 
 const down = list => list.some(k => held.has(k));
 const hit  = list => list.some(k => edge.has(k));
-const anyHit = () => edge.size > 0;
+
+/* --- ゲームパッド（1P用） -------------------------------------------------
+   標準マッピング（Xbox / PS / Switch Pro など）を想定。
+   ショット: A・X・R1・R2 ／ ボム: B・Y・L1・L2 ／ 一時停止: START
+   移動: 左スティック（アナログ）＋ 十字キー                                */
+const PAD_SHOT  = [0,2,5,7];
+const PAD_BOMB  = [1,3,4,6];
+const PAD_START = [9];
+const DEADZONE  = 0.24;
+
+const Pad = {
+  on:false, name:'', btn:[], prev:[], ax:[0,0],
+  nav:{x:0,y:0}, navPrev:{x:0,y:0},
+  poll(){
+    const list = navigator.getGamepads ? navigator.getGamepads() : null;
+    let gp = null;
+    if (list) for (let i=0;i<list.length;i++){
+      const g = list[i];
+      if (g && g.connected && g.buttons && g.buttons.length){ gp = g; break; }
+    }
+    this.prev = this.btn;
+    this.navPrev = this.nav;
+    if (!gp){ this.on=false; this.name=''; this.btn=[]; this.ax=[0,0]; this.nav={x:0,y:0}; return; }
+    this.on = true; this.name = gp.id;
+    this.btn = gp.buttons.map(b => b.pressed || b.value > 0.4);
+    this.ax  = [gp.axes[0]||0, gp.axes[1]||0];
+    // メニュー用に方向をデジタル化（十字キーとスティックの両方）
+    let nx = this.ax[0], ny = this.ax[1];
+    if (this.btn[14]) nx = -1; if (this.btn[15]) nx = 1;
+    if (this.btn[12]) ny = -1; if (this.btn[13]) ny = 1;
+    this.nav = { x: nx>0.55?1:(nx<-0.55?-1:0), y: ny>0.55?1:(ny<-0.55?-1:0) };
+    // パッドのボタンが押されたらサウンドの初期化も試みる
+    if (this.btn.some((b,i) => b && !this.prev[i])) initAudio();
+  },
+  down(list){ return this.on && list.some(i => this.btn[i]); },
+  hit(list){  return this.on && list.some(i => this.btn[i] && !this.prev[i]); },
+  anyHit(){   return this.on && this.btn.some((b,i) => b && !this.prev[i]); },
+  // 移動ベクトル（デッドゾーン処理つき）
+  move(){
+    if (!this.on) return {x:0,y:0};
+    let x = this.ax[0], y = this.ax[1];
+    const d = Math.hypot(x,y);
+    if (d < DEADZONE) { x = 0; y = 0; }
+    else { const k = Math.min(1,(d-DEADZONE)/(0.95-DEADZONE))/d; x*=k; y*=k; }
+    if (this.btn[14]) x = -1; if (this.btn[15]) x = 1;
+    if (this.btn[12]) y = -1; if (this.btn[13]) y = 1;
+    return {x,y};
+  },
+  navUp(){    return this.nav.y===-1 && this.navPrev.y!==-1; },
+  navDown(){  return this.nav.y=== 1 && this.navPrev.y!== 1; },
+  navLeft(){  return this.nav.x===-1 && this.navPrev.x!==-1; },
+  navRight(){ return this.nav.x=== 1 && this.navPrev.x!== 1; }
+};
+window.addEventListener('gamepadconnected', () => initAudio());
+
+const anyHit = () => edge.size > 0 || Pad.anyHit();
+// 1P はキーボードとゲームパッドのどちらでも操作できる
+const pDown = (p, act) => down(playerKeys(p)[act]) ||
+  (p.id===0 && (act==='shot' ? Pad.down(PAD_SHOT) : false));
+const pHit  = (p, act) => hit(playerKeys(p)[act]) ||
+  (p.id===0 && (act==='shot' ? Pad.hit(PAD_SHOT) : act==='bomb' ? Pad.hit(PAD_BOMB) : false));
 
 /* ============================================================
    2. サウンド（WebAudio 合成・外部ファイル不要）
@@ -434,7 +494,7 @@ function updatePlayer(p){
 
   // --- 未参加：途中参加受付 ---
   if (!p.playing){
-    if ((state==='play'||state==='warning'||state==='intro') && hit(playerKeys(p).shot)){
+    if ((state==='play'||state==='warning'||state==='intro') && pHit(p,'shot')){
       joinPlayer(p, true); SFX.ok();
     }
     return;
@@ -442,7 +502,7 @@ function updatePlayer(p){
   // --- 残機ゼロ：コンティニュー待ち ---
   if (p.lives < 0){
     p.outWait--;
-    if (hit(playerKeys(p).shot)){ joinPlayer(p, false); SFX.ok(); }
+    if (pHit(p,'shot')){ joinPlayer(p, false); SFX.ok(); }
     return;
   }
   // --- 復活待ち ---
@@ -461,7 +521,13 @@ function updatePlayer(p){
   const K = playerKeys(p);
   let dx = (down(K.right)?1:0) - (down(K.left)?1:0);
   let dy = (down(K.down)?1:0) - (down(K.up)?1:0);
-  if (dx && dy){ dx *= 0.7071; dy *= 0.7071; }
+  if (p.id === 0 && Pad.on){                 // 1P はゲームパッドでも移動できる
+    const g = Pad.move();
+    if (Math.abs(g.x) > Math.abs(dx)) dx = g.x;
+    if (Math.abs(g.y) > Math.abs(dy)) dy = g.y;
+  }
+  const mag = Math.hypot(dx,dy);
+  if (mag > 1){ dx /= mag; dy /= mag; }      // 斜め移動が速くならないように
   const sp = 3.6;
   p.x = clamp(p.x + dx*sp, 14, W-14);
   p.y = clamp(p.y + dy*sp, 26, H-16);
@@ -469,13 +535,13 @@ function updatePlayer(p){
   // --- ショット ---
   if (p.fireCd > 0) p.fireCd--;
   if (p.missileCd > 0) p.missileCd--;
-  if (down(K.shot) && p.fireCd <= 0){
+  if (pDown(p,'shot') && p.fireCd <= 0){
     firePlayer(p);
     p.fireCd = p.power >= 4 ? 5 : 6;
   }
 
   // --- ボム ---
-  if (hit(K.bomb) && p.bombs > 0 && p.bombT <= 0){
+  if (pHit(p,'bomb') && p.bombs > 0 && p.bombT <= 0){
     p.bombs--; p.bombT = 150; p.inv = Math.max(p.inv, 165);
     doBomb(p);
   }
@@ -2032,21 +2098,32 @@ function drawTitle(){
   }
 
   ctx.globalAlpha = 0.55 + 0.45*Math.sin(t*0.07);
-  txtOutline('決定：Space / Enter　　選択：W/S・↑↓　　変更：A/D・←→', W/2, 500, 11, '#cfe8ff', 'center', 3);
+  txtOutline(Pad.on ? '決定：A / START　　選択：十字・左スティック　　（キーボードも使えます）'
+                    : '決定：Space / Enter　　選択：W/S・↑↓　　変更：A/D・←→',
+             W/2, 500, 11, '#cfe8ff', 'center', 3);
   ctx.globalAlpha = 1;
 
-  ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fillRect(24, 520, W-48, 94);
-  txt('■ 操作方法', 36, 540, 12, '#7fd8ff');
-  txt('1P： W A S D 移動 ／ Space ショット ／ Q・左Shift ボム', 36, 560, 11, '#bcd8f0');
-  txt('2P： ↑↓←→ 移動 ／ Enter・テンキー0 ショット ／ ／・右Shift ボム', 36, 578, 11, '#bcd8f0');
-  txt('P 一時停止　M サウンド切替　　2Pはゲーム中でも途中参加できます', 36, 598, 11, '#7fa8c8');
+  ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fillRect(24, 514, W-48, 112);
+  txt('■ 操作方法', 36, 534, 12, '#7fd8ff');
+  txt('1P： W A S D 移動 ／ Space ショット ／ Q・左Shift ボム', 36, 554, 11, '#bcd8f0');
+  txt('2P： ↑↓←→ 移動 ／ Enter・テンキー0 ショット ／ ／・右Shift ボム', 36, 572, 11, '#bcd8f0');
+  if (Pad.on){
+    const nm = Pad.name.replace(/\s*\([^)]*\)\s*/g,'').trim().slice(0,26) || 'ゲームパッド';
+    txt('1P パッド： ' + nm, 36, 592, 11, '#7dff8a');
+    txt('　左スティック/十字 移動 ／ A・X ショット ／ B・Y ボム ／ START 一時停止', 36, 608, 10, '#7dff8a');
+  } else {
+    txt('1P はゲームパッドでも操作できます（接続後、ボタンを1回押してください）', 36, 592, 11, '#7fa8c8');
+    txt('P 一時停止　M サウンド切替　　2Pはゲーム中でも途中参加できます', 36, 610, 11, '#7fa8c8');
+  }
 }
 
 function updateTitle(){
   for (const s of stars){ s.y += s.z*0.6; if (s.y>H){ s.y=-2; s.x=rand(0,W); } }
-  const up   = hit(['KeyW','ArrowUp']), dn = hit(['KeyS','ArrowDown']);
-  const lf   = hit(['KeyA','ArrowLeft']), rt = hit(['KeyD','ArrowRight']);
-  const ok   = hit(['Space','Enter','Numpad0','NumpadEnter']);
+  const up = hit(['KeyW','ArrowUp'])    || Pad.navUp();
+  const dn = hit(['KeyS','ArrowDown'])  || Pad.navDown();
+  const lf = hit(['KeyA','ArrowLeft'])  || Pad.navLeft();
+  const rt = hit(['KeyD','ArrowRight']) || Pad.navRight();
+  const ok = hit(['Space','Enter','Numpad0','NumpadEnter']) || Pad.hit(PAD_SHOT) || Pad.hit(PAD_START);
   if (up){ menuSel = (menuSel+MENU_ROWS-1)%MENU_ROWS; SFX.menu(); }
   else if (dn){ menuSel = (menuSel+1)%MENU_ROWS; SFX.menu(); }
   else if (lf || rt){
@@ -2132,7 +2209,7 @@ function drawGameOver(){
   txtOutline('到達：STAGE ' + (stageIndex+1) + '　' + STAGES[stageIndex].title, W/2, y+16, 13, '#9fc4e8','center',4);
   if (overT > 100){
     ctx.globalAlpha = 0.5 + 0.5*Math.sin(gameFrame*0.09);
-    txtOutline('何かキーを押すとタイトルへ', W/2, 500, 14, '#cfe8ff','center',4);
+    txtOutline(Pad.on ? '何かキー／パッドのボタンでタイトルへ' : '何かキーを押すとタイトルへ', W/2, 500, 14, '#cfe8ff','center',4);
     ctx.globalAlpha = 1;
   }
 }
@@ -2213,7 +2290,7 @@ function drawEnding(){
     ctx.globalAlpha = 1;
     if (endT > 1030){
       ctx.globalAlpha = 0.5+0.5*Math.sin(gameFrame*0.09);
-      txtOutline('何かキーを押すとタイトルへ', W/2, 470, 13, '#cfe8ff','center',4);
+      txtOutline(Pad.on ? '何かキー／パッドのボタンでタイトルへ' : '何かキーを押すとタイトルへ', W/2, 470, 13, '#cfe8ff','center',4);
       ctx.globalAlpha = 1;
     }
   }
@@ -2238,13 +2315,14 @@ function frame(now){
 
 function update(){
   gameFrame++;
+  Pad.poll();
   if (sfxShotCd > 0) sfxShotCd--;
   Bgm.update();
 
   // 共通トグル
   if (hit(['KeyM'])){ menuSound = !menuSound; setSound(menuSound); }
   if (state === 'play' || state === 'warning'){
-    if (hit(['KeyP','Escape'])) paused = !paused;
+    if (hit(['KeyP','Escape']) || Pad.hit(PAD_START)) paused = !paused;
   }
 
   if (paused){ edge.clear(); return; }
@@ -2336,7 +2414,7 @@ function render(){
   if (paused){
     ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,W,H);
     txtOutline('PAUSE', W/2, H/2-6, 34, '#ffd83d', 'center', 5);
-    txtOutline('Pキーで再開', W/2, H/2+28, 14, '#cfe8ff', 'center', 4);
+    txtOutline(Pad.on ? 'Pキー / START で再開' : 'Pキーで再開', W/2, H/2+28, 14, '#cfe8ff', 'center', 4);
   }
   // 走査線
   ctx.globalAlpha = 0.055; ctx.fillStyle='#000';
