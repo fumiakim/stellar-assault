@@ -237,6 +237,20 @@ function dtext(str, x, y, col, align, sc, sh){
   }
 }
 
+// --- 敵弾の玉。色ごとにスプライトを焼いてキャッシュする（6ドット / 大きい弾は8ドット） ---
+const BALL6 = ['.####.','#%%%%#','#%00%#','#%00%#','#%%%%#','.####.'];
+const BALL8 = ['..####..','.#%%%%#.','#%%%%%%#','#%%00%%#','#%%00%%#','#%%%%%%#','.#%%%%#.','..####..'];
+const BALL_CACHE = new Map();
+function ballSpr(col, core, big){
+  const key = (big ? '8' : '6') + col + core;
+  let c = BALL_CACHE.get(key);
+  if (!c){
+    c = spr(big ? BALL8 : BALL6, {'#':'#080c14', '%':col, '0':core || '#ffffff'});
+    BALL_CACHE.set(key, c);
+  }
+  return c;
+}
+
 // スプライトを真っ白にした複製（被弾フラッシュ用）
 function whiteOf(src){
   const c = document.createElement('canvas');
@@ -667,7 +681,7 @@ function joinPlayer(p, firstTime){
   if (!firstTime){ p.credits++; totalContinues++; }
   p.msg = 'GO!'; p.msgT = 60;
   // 参加人数が変わったら敵の耐久を調整
-  hpScale = (1.0 + stageIndex*0.13) * (playingCount() > 1 ? 1.45 : 1.0);
+  hpScale = (1.0 + stageIndex*0.09) * (playingCount() > 1 ? 1.45 : 1.0);
 }
 function playerKeys(p){ return p.id===0 ? P1KEY : P2KEY; }
 
@@ -1353,7 +1367,7 @@ const BOSS3 = {
 /* --- 4面：巨大機兵 ゴライアス --- */
 const BOSS4 = {
   name:'GOLIATH', title:'WAR MACHINE GOLIATH',
-  hp:10500, w:200, h:180, ey:150, bonus:150000,
+  hp:9500, w:200, h:180, ey:150, bonus:150000,
   parts:[ {dx:-92, dy:8, r:30, hp:1350}, {dx:92, dy:8, r:30, hp:1350} ],
   draw(b, x, y){
     for (const t of [-1,1]) rct(t<0 ? x-26 : x+16, y-5, 10, 10, bc('#2c3a4d'));   // 肩
@@ -1424,7 +1438,7 @@ const BOSS4 = {
 /* --- 5面：最終要塞コア オメガ --- */
 const BOSS5 = {
   name:'OMEGA', title:'FORTRESS CORE OMEGA',
-  hp:12000, w:210, h:210, ey:170, bonus:250000,
+  hp:10000, w:210, h:210, ey:170, bonus:250000,
   parts:[ {dx:0,dy:0,r:0,hp:1} ],   // 実際は下で衛星として扱う（ダミー除去）
   draw(b, x, y){
     for (let i=0;i<12;i++){                               // 外殻リング（回転）
@@ -1537,7 +1551,7 @@ function initStars(){
 }
 initStars();
 
-let bgFar = [], bgBake = null;
+let bgFar = [], bgSky = [], bgBake = null;
 
 /* 面ごとのグラデーションを一度だけオフスクリーンに焼く。
    帯の境目には市松のディザを入れて、ドット絵らしい階調にする。 */
@@ -1562,10 +1576,11 @@ function bakeBG(cols, extra){
 }
 
 function initBG(idx){
-  bgProps = []; bgFar = [];
+  bgProps = []; bgFar = []; bgSky = [];
   if (idx === 0){                        // 空：雲を2層
     for (let i=0;i<14;i++) bgProps.push({x:rand(-40,W+40), y:rand(-H,H), s:rand(0.7,1.6), sp:rand(1.2,2.2), a:1});
     for (let i=0;i<18;i++) bgFar.push({x:rand(0,W), y:rand(-H,H), s:rand(0.3,0.6), sp:rand(0.3,0.7)});
+    for (let i=0;i<10;i++) bgSky.push({x:rand(0,W), y:rand(-H,H), s:rand(0.8,2.0), sp:rand(0.12,0.3), k:rint(0,2)});
     bgBake = bakeBG(SKY, g => {          // 太陽の光芒
       g.fillStyle = '#2a4a7a';
       for (let r = 30; r > 0; r -= 6){ g.globalAlpha = 0.10; g.beginPath(); g.arc(150, 26, r, 0, TAU); g.fill(); }
@@ -1574,20 +1589,24 @@ function initBG(idx){
   } else if (idx === 1){                 // 海：島＋深場
     for (let i=0;i<9;i++)  bgProps.push({x:rand(20,W-20), y:rand(-H,H), s:rand(0.7,1.7), sp:rand(1.0,1.6), a:1, t:rand(0,10)});
     for (let i=0;i<12;i++) bgFar.push({x:rand(0,W), y:rand(-H,H), s:rand(0.6,1.4), sp:rand(0.4,0.8)});
+    for (let i=0;i<14;i++) bgSky.push({x:rand(0,W), y:rand(-H,H), s:rand(0.5,1.4), sp:rand(0.9,1.5), k:rint(0,2)});
     bgBake = bakeBG(SEA);
   } else if (idx === 2){                 // 峡谷：岩＋溶岩
     for (let i=0;i<16;i++) bgProps.push({x:rand(0,W), y:rand(-H,H), s:rand(0.6,1.6), sp:rand(1.2,2.2), a:1, r:rand(0,TAU)});
     for (let i=0;i<10;i++) bgFar.push({x:rand(0,W), y:rand(-H,H), s:rand(0.8,1.6), sp:rand(0.4,0.8)});
+    for (let i=0;i<9;i++)  bgSky.push({x:rand(0,W), y:rand(-H,H), s:rand(0.7,1.5), sp:rand(1.0,1.8), k:rint(0,2)});
     bgBake = bakeBG(CANY);
   } else if (idx === 3){                 // 都市：ビル2層
     for (let i=0;i<20;i++) bgProps.push({x:rand(-20,W+20), y:rand(-H,H), s:rand(0.7,1.5), sp:rand(1.4,2.4), a:1,
       w:rand(28,70), h:rand(70,200), seed:rint(0,9999)});
     for (let i=0;i<22;i++) bgFar.push({x:rand(0,W), y:rand(-H,H), s:rand(0.3,0.6), sp:rand(0.4,0.9),
       w:rand(24,54), h:rand(60,150), seed:rint(0,9999)});
+    for (let i=0;i<8;i++)  bgSky.push({x:rand(20,W-20), y:rand(-H,H), s:rand(0.8,1.5), sp:rand(1.6,2.6), seed:rint(0,9999), k:rint(0,3)});
     bgBake = bakeBG(CITY);
   } else {                               // 宇宙要塞：パネル＋星雲
     for (let i=0;i<16;i++) bgProps.push({x:rand(0,W), y:rand(-H,H), s:rand(0.7,1.5), sp:rand(1.4,2.6), a:1, seed:rint(0,9999)});
     for (let i=0;i<8;i++)  bgFar.push({x:rand(0,W), y:rand(-H,H), s:rand(1.2,2.6), sp:rand(0.3,0.6), seed:rint(0,9999)});
+    for (let i=0;i<10;i++) bgSky.push({x:rand(0,W), y:rand(-H,H), s:rand(0.8,1.8), sp:rand(1.8,3.0), seed:rint(0,9999), k:rint(0,3)});
     bgBake = bakeBG(['#01030a','#01030a','#02040c','#02040c','#03050e','#03050e','#040610','#040610']);
   }
 }
@@ -1603,6 +1622,10 @@ function updateBG(){
     p.y += p.sp * bgSpeed * 0.5;
     if (p.y > H + 260){ p.y = -rand(140, 360); p.x = rand(0, W); }
   }
+  for (const p of bgSky){
+    p.y += p.sp * bgSpeed * 0.5;
+    if (p.y > H + 300){ p.y = -rand(160, 400); p.x = rand(0, W); }
+  }
 }
 
 const SKY   = ['#0a1730','#0d1e3c','#122748','#173055','#1d3a63','#234471','#2a4f80','#31598d'];
@@ -1614,6 +1637,18 @@ function drawBG(idx){
   ctx.drawImage(bgBake, 0, 0);           // 焼いておいたグラデーション
 
   if (idx === 0){                        // ---- 空 ----
+    for (const p of bgSky){              // 最遠景：巻雲と鳥の群れ
+      const x = Math.round(dot(p.x)), y = Math.round(dot(p.y)), s = p.s;
+      if (p.k === 0){                    // 巻雲（薄い筋）
+        for (let i = 0; i < 5; i++) rct(x + i*4 - 8, y + (i&1), Math.round(3*s), 1, '#243a5c');
+      } else {                           // 鳥の群れ
+        for (let i = 0; i < 4; i++){
+          const bx = x + i*5 - 7, by = y + ((i*3)%4) - 2;
+          const f = (Math.floor(scrollY*0.08) + i) % 2;
+          pset(bx, by+f, '#1d2f4a'); pset(bx+1, by, '#1d2f4a'); pset(bx+2, by+f, '#1d2f4a');
+        }
+      }
+    }
     for (const p of bgFar){              // 遠くの小さな雲
       const x = Math.round(dot(p.x)), y = Math.round(dot(p.y)), s = p.s;
       oval(x, y, 9*s, 2*s, '#2b4266');
@@ -1631,6 +1666,19 @@ function drawBG(idx){
       oval(x+7*s, y-1*s, 5*s, 1*s, '#6a8cbc');
     }
   } else if (idx === 1){                 // ---- 海 ----
+    for (const p of bgSky){              // 白波・岩礁・ブイ
+      const x = Math.round(dot(p.x)), y = Math.round(dot(p.y)), s = p.s;
+      if (p.k === 0){                    // 白波のかたまり
+        oval(x, y, 7*s, 2*s, '#3f7f9c');
+        pset(x-2, y-1, '#8fd0e8'); pset(x+2, y, '#8fd0e8'); pset(x, y+1, '#8fd0e8');
+      } else if (p.k === 1){             // 岩礁
+        rct(x-3*s, y-2*s, 6*s, 4*s, '#16303c'); rct(x-2*s, y-3*s, 3*s, 2*s, '#22475a');
+        for (let a2 = 0; a2 < 6; a2++) pset(x + Math.cos(a2)*5*s, y + Math.sin(a2)*3*s, '#7fbcd4');
+      } else {                           // ブイ
+        rct(x-1, y-3, 2, 5, '#8a3f2a');
+        pset(x, y-4, (Math.floor(scrollY*0.06) % 2) ? '#ff8a4a' : '#5a2a18');
+      }
+    }
     for (const p of bgFar){              // 深場の影
       const x = Math.round(dot(p.x)), y = Math.round(dot(p.y));
       oval(x, y, 20*p.s, 8*p.s, '#02101c');
@@ -1659,6 +1707,12 @@ function drawBG(idx){
         }
     }
   } else if (idx === 2){                 // ---- 峡谷 ----
+    for (const p of bgSky){              // 土煙・小石・溶岩の飛沫
+      const x = Math.round(dot(p.x)), y = Math.round(dot(p.y)), s = p.s;
+      if (p.k === 0) oval(x, y, 6*s, 2*s, '#2a1a0c');
+      else if (p.k === 1){ pset(x, y, '#4d3418'); pset(x+2, y+1, '#3d2812'); }
+      else { pset(x, y, '#c2431a'); pset(x, y-1, '#ff9a3b'); }
+    }
     for (const p of bgFar){              // 奥の岩肌
       const x = Math.round(dot(p.x)), y = Math.round(dot(p.y)), s = p.s;
       rct(x-8*s, y-6*s, 16*s, 12*s, '#1d0f05');
@@ -1694,6 +1748,23 @@ function drawBG(idx){
       }
     }
     drawCity(bgFar, 0.18, '#0a0f1e', '#141c33', 0.22);
+    for (const p of bgSky){              // 屋上のビルボードとサーチライト
+      const x = Math.round(dot(p.x)), y = Math.round(dot(p.y)), s = p.s;
+      if (p.k < 2){                      // 電光掲示板
+        const w = Math.round(10*s), h = Math.round(6*s);
+        rct(x-w/2, y-h/2, w, h, '#0b1120');
+        rct(x-w/2, y-h/2, w, 1, '#2a3c66');
+        const ph = Math.floor(scrollY*0.09) + p.seed;
+        for (let ry = 1; ry < h-1; ry++)
+          for (let rx = 1; rx < w-1; rx++)
+            if (((rx + ry + ph) % 5) < 2) pset(x-w/2+rx, y-h/2+ry, p.k ? '#ff5a8a' : '#4fd0ff');
+      } else {                           // サーチライト
+        const sw = Math.sin(scrollY*0.02 + p.seed)*0.5;
+        for (let t = 0; t < 26*s; t++)
+          if ((t + Math.floor(scrollY*0.1)) % 3) pset(x + t*sw, y - t, '#16304e');
+        pset(x, y, '#9fd8ff');
+      }
+    }
     drawCity(bgProps, 0.28, '#111830', '#1e2a4a', 0.40);
   } else {                               // ---- 宇宙要塞 ----
     for (const p of bgFar){              // 星雲
@@ -1705,6 +1776,24 @@ function drawBG(idx){
     }
     for (const st of stars)
       pset(dot(st.x), dot(st.y), st.z > 2.4 ? '#ffffff' : (st.z > 1.4 ? '#9fc0ff' : '#3a4d78'));
+    for (const p of bgSky){              // 歯車・タンク・警告灯
+      const x = Math.round(dot(p.x)), y = Math.round(dot(p.y)), s = p.s;
+      if (p.k === 0){                    // 回転する歯車
+        const a0 = scrollY*0.01 + p.seed;
+        disc(x, y, 6*s, '#14203a'); disc(x, y, 3*s, '#0a1220');
+        for (let i = 0; i < 8; i++){
+          const a = a0 + i*TAU/8;
+          rct(x + Math.cos(a)*7*s - 1, y + Math.sin(a)*7*s - 1, 2, 2, '#1e2f52');
+        }
+      } else if (p.k === 1){             // 円筒タンク
+        rct(x-4*s, y-8*s, 8*s, 16*s, '#0d1728');
+        rct(x-4*s, y-8*s, 1, 16*s, '#1e3050'); rct(x+4*s-1, y-8*s, 1, 16*s, '#1e3050');
+        for (let k = -6; k < 7; k += 4) rct(x-4*s, y+k*s, 8*s, 1, '#152438');
+      } else {                           // 警告灯
+        pset(x, y, (Math.floor(scrollY*0.08) % 2) ? '#ff5a5a' : '#3a1010');
+        rct(x-1, y+1, 3, 2, '#182234');
+      }
+    }
     for (const p of bgProps){            // 装甲パネル
       const w = Math.round(28*p.s), h = Math.round(40*p.s);
       const x = Math.round(dot(p.x)) - (w>>1), y = Math.round(dot(p.y)) - (h>>1);
@@ -1783,7 +1872,7 @@ const STAGES = [
       evt(2480,()=> wave('pop', 10, 10, i=>40+((i*67)%(W-80)), {vy:3.1})),
     ]},
 
-  { name:'STAGE 2', title:'SEA DEFENSE', bgm:'st2', speed:2.0, bossAt:2880, dens:0.68, dim:0.22,
+  { name:'STAGE 2', title:'SEA DEFENSE', bgm:'st2', speed:2.0, bossAt:2880, dens:0.57, dim:0.22,
     script:[
       evt(70,  ()=> wave('pop', 8, 13, i=>arcX(i,8,W/2,44), {vy:3.0})),
       evt(260, ()=> { spawn('sniper', -30, -20, {sx:1}); spawn('sniper', W+30, -20, {sx:-1}); }),
@@ -1802,7 +1891,7 @@ const STAGES = [
       evt(2640,()=> spawn('heavy', W/2, -40, {})),
     ]},
 
-  { name:'STAGE 3', title:'RED CANYON', bgm:'st3', speed:2.4, bossAt:2940, dens:0.85, dim:0.18,
+  { name:'STAGE 3', title:'RED CANYON', bgm:'st3', speed:2.4, bossAt:2940, dens:0.63, dim:0.18,
     script:[
       evt(70,  ()=> wave('zig', 8, 15, i=>arcX(i,8,W/2,42), {vy:2.1, mk:(o,i)=>o.ph=i*0.45})),
       evt(280, ()=> wave('mine', 6, 22, i=>60+i*(W-120)/5, {vy:2.2, fuse:280})),
@@ -1821,7 +1910,7 @@ const STAGES = [
       evt(2780,()=> spawn('heavy', W/2, -40, {})),
     ]},
 
-  { name:'STAGE 4', title:'NIGHT CITY', bgm:'st4', speed:2.2, bossAt:3000, dens:0.95, dim:0.12,
+  { name:'STAGE 4', title:'NIGHT CITY', bgm:'st4', speed:2.2, bossAt:3000, dens:0.67, dim:0.12,
     script:[
       evt(70,  ()=> wave('dive', 6, 20, i=>arcX(i,6,W/2,66), {})),
       evt(250, ()=> { spawn('turret', 80,-30,{ty:110}); spawn('turret', W-80,-30,{ty:110}); }),
@@ -1840,7 +1929,7 @@ const STAGES = [
       evt(2840,()=> wave('pop', 22, 6, i=>40+((i*79)%(W-80)), {vy:4.2, shoot:true})),
     ]},
 
-  { name:'STAGE 5', title:'FORTRESS OMEGA', bgm:'st5', speed:2.8, bossAt:3120, dens:1.00, dim:0.08,
+  { name:'STAGE 5', title:'FORTRESS OMEGA', bgm:'st5', speed:2.8, bossAt:3120, dens:0.70, dim:0.08,
     script:[
       evt(60,  ()=> wave('pop', 20, 6, i=>40+((i*103)%(W-80)), {vy:4.2, shoot:true})),
       evt(300, ()=> { spawn('turret', 80,-30,{ty:110}); spawn('turret', W/2,-30,{ty:160}); spawn('turret', W-80,-30,{ty:110}); }),
@@ -1895,10 +1984,10 @@ function startStage(idx){
   stageTime = 0; scriptPtr = 0; bossSpawned = false;
   const st = STAGES[idx];
   bgSpeed = st.speed;
-  bulSp   = 0.88 + idx*0.07;
+  bulSp   = 0.88 + idx*0.03;
   dens    = st.dens * FIRE_RATE;   // 発射間隔（小さいほど間隔が長い）
   cdens   = Math.sqrt(st.dens);    // 1回に撒く弾数（頻度とは独立に決める）
-  hpScale = (1.0 + idx*0.13) * (playingCount() > 1 ? 1.45 : 1.0);
+  hpScale = (1.0 + idx*0.09) * (playingCount() > 1 ? 1.45 : 1.0);
   bossScale = (playingCount() > 1 ? 1.75 : 1.0);
   initBG(idx); initStars();
   state = 'intro'; introT = 0;
@@ -2048,16 +2137,14 @@ function drawShots(){
     const x = Math.round(dot(b.x)), y = Math.round(dot(b.y));
     if (b.type === 'needle'){
       const vert = Math.abs(b.vy) >= Math.abs(b.vx);
-      if (vert){ rct(x-1, y-3, 3, 7, RIM); rct(x, y-2, 1, 5, b.col); }
-      else     { rct(x-3, y-1, 7, 3, RIM); rct(x-2, y, 5, 1, b.col); }
-      pset(x, y, '#ffffff');
+      if (vert){ rct(x-2, y-4, 4, 9, RIM); rct(x-1, y-3, 2, 7, b.col); }
+      else     { rct(x-4, y-2, 9, 4, RIM); rct(x-3, y-1, 7, 2, b.col); }
+      pset(x, y, '#ffffff'); pset(x-1, y, '#ffffff');
     } else if (b.type === 'missile'){
-      rct(x-2, y-2, 4, 5, RIM); rct(x-1, y-2, 2, 4, b.col); pset(x, y-1, '#ffffff');
+      rct(x-3, y-3, 6, 7, RIM); rct(x-2, y-2, 4, 5, b.col);
+      rct(x-1, y-1, 2, 2, '#ffffff');
     } else {
-      const r = Math.max(1, Math.round(b.r / PIXEL * 0.75));
-      disc(x, y, r+1, RIM);
-      disc(x, y, r, b.col);
-      pset(x, y, b.core || '#ffffff');
+      blit(ballSpr(b.col, b.core, b.r / PIXEL >= 2.1), x, y);
     }
   }
 }
