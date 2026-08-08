@@ -1847,7 +1847,7 @@ function evt(t, f){ return {t, f}; }
 const arcX = (i,n,cx,sp) => cx + (i-(n-1)/2)*sp;
 
 const STAGES = [
-  { name:'STAGE 1', title:'AZURE SKIES', bgm:'st1', speed:1.6, bossAt:2760, dens:0.50, dim:0.26,
+  { name:'STAGE 1', title:'AZURE SKIES', bgm:'st1', speed:1.6, bossAt:2760, dens:0.45, dim:0.26,
     script:[
       // 導入：撃つ敵を出さず、動きと自機の火力に慣れてもらう
       evt(80,  ()=> wave('pop', 5, 18, i=>105+i*22, {vy:2.3})),
@@ -1872,7 +1872,7 @@ const STAGES = [
       evt(2480,()=> wave('pop', 10, 10, i=>40+((i*67)%(W-80)), {vy:3.1})),
     ]},
 
-  { name:'STAGE 2', title:'SEA DEFENSE', bgm:'st2', speed:2.0, bossAt:2880, dens:0.57, dim:0.22,
+  { name:'STAGE 2', title:'SEA DEFENSE', bgm:'st2', speed:2.0, bossAt:2880, dens:0.52, dim:0.22,
     script:[
       evt(70,  ()=> wave('pop', 8, 13, i=>arcX(i,8,W/2,44), {vy:3.0})),
       evt(260, ()=> { spawn('sniper', -30, -20, {sx:1}); spawn('sniper', W+30, -20, {sx:-1}); }),
@@ -1891,7 +1891,7 @@ const STAGES = [
       evt(2640,()=> spawn('heavy', W/2, -40, {})),
     ]},
 
-  { name:'STAGE 3', title:'RED CANYON', bgm:'st3', speed:2.4, bossAt:2940, dens:0.63, dim:0.18,
+  { name:'STAGE 3', title:'RED CANYON', bgm:'st3', speed:2.4, bossAt:2940, dens:0.58, dim:0.18,
     script:[
       evt(70,  ()=> wave('zig', 8, 15, i=>arcX(i,8,W/2,42), {vy:2.1, mk:(o,i)=>o.ph=i*0.45})),
       evt(280, ()=> wave('mine', 6, 22, i=>60+i*(W-120)/5, {vy:2.2, fuse:280})),
@@ -1910,7 +1910,7 @@ const STAGES = [
       evt(2780,()=> spawn('heavy', W/2, -40, {})),
     ]},
 
-  { name:'STAGE 4', title:'NIGHT CITY', bgm:'st4', speed:2.2, bossAt:3000, dens:0.67, dim:0.12,
+  { name:'STAGE 4', title:'NIGHT CITY', bgm:'st4', speed:2.2, bossAt:3000, dens:0.62, dim:0.12,
     script:[
       evt(70,  ()=> wave('dive', 6, 20, i=>arcX(i,6,W/2,66), {})),
       evt(250, ()=> { spawn('turret', 80,-30,{ty:110}); spawn('turret', W-80,-30,{ty:110}); }),
@@ -1929,7 +1929,7 @@ const STAGES = [
       evt(2840,()=> wave('pop', 22, 6, i=>40+((i*79)%(W-80)), {vy:4.2, shoot:true})),
     ]},
 
-  { name:'STAGE 5', title:'FORTRESS OMEGA', bgm:'st5', speed:2.8, bossAt:3120, dens:0.70, dim:0.08,
+  { name:'STAGE 5', title:'FORTRESS OMEGA', bgm:'st5', speed:2.8, bossAt:3120, dens:0.65, dim:0.08,
     script:[
       evt(60,  ()=> wave('pop', 20, 6, i=>40+((i*103)%(W-80)), {vy:4.2, shoot:true})),
       evt(300, ()=> { spawn('turret', 80,-30,{ty:110}); spawn('turret', W/2,-30,{ty:160}); spawn('turret', W-80,-30,{ty:110}); }),
