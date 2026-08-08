@@ -1,1 +1,7 @@
 .DS_Store
+
+# 背景の生成元画像とプレビュー（再生成できるのでコミットしない）
+art/bg/raw-*.png
+art/bg/*-strip*.png
+art/bg/all-mock.png
+art/bg/ship*.png

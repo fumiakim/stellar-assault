@@ -13,7 +13,9 @@ import sys
 from PIL import Image
 
 PW, PH = 192, 256
-SEAM = 24            # 継ぎ目をブレンドする幅
+SEAM  = 10           # 継ぎ目をクロスディゾルブする幅（狭く）
+SHADE = 22           # 継ぎ目を暗く落とす幅（影を通過するように見せる）
+SHADE_MIN = 0.55     # 継ぎ目のいちばん暗いところの明るさ
 COLORS = 24
 
 def load(src, darken, desat):
@@ -29,16 +31,23 @@ def load(src, darken, desat):
     return im
 
 def blend_seam(strip, y):
-    """y を境にした継ぎ目を上下 SEAM/2 にわたって混ぜる（y は strip 内の位置）"""
+    """y を境に、狭くクロスディゾルブしてから、広めに暗く落とす。
+    別々に生成した絵をただ混ぜると白っぽい帯になるので、
+    影を通過したように見せて繋ぎ目を隠す。"""
     p = strip.load(); H = strip.height
     for i in range(SEAM):
-        a = i/(SEAM-1)                      # 0→1
-        ya = (y - SEAM//2 + i) % H
-        yb = (y + SEAM//2 - i - 1) % H
+        a = (i+1)/(SEAM+1) * 0.5
+        ya, yb = (y - SEAM + i) % H, (y + SEAM - i - 1) % H
         for x in range(PW):
             ca, cb = p[x,ya], p[x,yb]
-            p[x,ya] = tuple(int(ca[c]*(1-a*0.5) + cb[c]*(a*0.5)) for c in range(3))
-            p[x,yb] = tuple(int(cb[c]*(1-a*0.5) + ca[c]*(a*0.5)) for c in range(3))
+            p[x,ya] = tuple(int(ca[c]*(1-a) + cb[c]*a) for c in range(3))
+            p[x,yb] = tuple(int(cb[c]*(1-a) + ca[c]*a) for c in range(3))
+    for i in range(-SHADE, SHADE):
+        k = SHADE_MIN + (1-SHADE_MIN) * (abs(i)/SHADE)**1.5
+        yy = (y + i) % H
+        for x in range(PW):
+            c = p[x,yy]
+            p[x,yy] = tuple(int(c[j]*k) for j in range(3))
 
 def main():
     name   = sys.argv[1] if len(sys.argv) > 1 else 'canyon'

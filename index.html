@@ -1646,7 +1646,11 @@ function loadBGTiles(idx, name, n){
     arr.push(im);
   }
 }
-loadBGTiles(2, 'canyon', 3);          // 3面：紅蓮の峡谷
+loadBGTiles(0, 'sky',      3);        // 1面：蒼空
+loadBGTiles(1, 'sea',      3);        // 2面：蒼海
+loadBGTiles(2, 'canyon',   3);        // 3面：峡谷
+loadBGTiles(3, 'city',     3);        // 4面：夜の街
+loadBGTiles(4, 'fortress', 3);        // 5面：宇宙要塞
 
 // タイルを縦に敷き詰めてスクロールさせる
 function drawBGTiles(T){
@@ -1660,10 +1664,82 @@ function drawBGTiles(T){
     }
 }
 
+
+/* 画像背景の上に重ねる、動きのある近景。背景そのものは静止画なので、
+   ここで手描きの要素を流して奥行きと生命感を出す。 */
+function drawBGOverlay(idx){
+  if (idx === 0){                                   // 空：鳥の群れと薄い雲
+    for (const p of bgSky){
+      const x = Math.round(dot(p.x)), y = Math.round(dot(p.y)), s = p.s;
+      if (p.k === 1){
+        for (let i = 0; i < 4; i++){
+          const bx = x + i*5 - 7, by = y + ((i*3)%4) - 2;
+          const f = (Math.floor(scrollY*0.08) + i) % 2;
+          pset(bx, by+f, '#141f33'); pset(bx+1, by, '#141f33'); pset(bx+2, by+f, '#141f33');
+        }
+      }
+    }
+    for (const p of bgProps){                       // 手前を横切る薄い雲
+      const x = Math.round(dot(p.x)), y = Math.round(dot(p.y)), s = p.s;
+      ctx.globalAlpha = 0.28;
+      oval(x, y, 13*s, 3*s, '#8fa8c8'); oval(x+8*s, y+1, 8*s, 2*s, '#8fa8c8');
+      ctx.globalAlpha = 1;
+    }
+  } else if (idx === 1){                            // 海：波のきらめきと白波
+    for (let i = 0; i < 9; i++){
+      const y = Math.round(((scrollY*1.4/PIXEL + i*29) % (PH+29)) - 14);
+      ctx.fillStyle = '#5fa8cc';
+      for (let x = (i*11)%16; x < PW; x += 16)
+        pset(x, y + Math.round(Math.sin(x*0.18 + scrollY*0.02 + i)*1.6), '#5fa8cc');
+    }
+    for (const p of bgSky){
+      const x = Math.round(dot(p.x)), y = Math.round(dot(p.y)), s = p.s;
+      if (p.k === 0){ pset(x-2, y-1, '#9fd8ee'); pset(x+2, y, '#9fd8ee'); pset(x, y+1, '#9fd8ee'); }
+      else if (p.k === 2){ pset(x, y, (Math.floor(scrollY*0.06) % 2) ? '#ff8a4a' : '#5a2a18'); }
+    }
+  } else if (idx === 2){                            // 峡谷：土煙・小石・溶岩の飛沫
+    for (const p of bgSky){
+      const x = Math.round(dot(p.x)), y = Math.round(dot(p.y)), s = p.s;
+      if (p.k === 0){ ctx.globalAlpha = 0.45; oval(x, y, 7*s, 2*s, '#5a3a1c'); ctx.globalAlpha = 1; }
+      else if (p.k === 1){ pset(x, y, '#6b4a24'); pset(x+2, y+1, '#4d3418'); }
+      else { pset(x, y, '#c2431a'); pset(x, y-1, '#ff9a3b'); }
+    }
+  } else if (idx === 3){                            // 街：サーチライトと点滅灯
+    for (const p of bgSky){
+      const x = Math.round(dot(p.x)), y = Math.round(dot(p.y)), s = p.s;
+      if (p.k === 2){
+        const sw = Math.sin(scrollY*0.02 + p.seed)*0.5;
+        ctx.globalAlpha = 0.5;
+        for (let t = 0; t < 26*s; t++)
+          if ((t + Math.floor(scrollY*0.1)) % 3) pset(x + t*sw, y - t, '#2a4a72');
+        ctx.globalAlpha = 1;
+        pset(x, y, '#bfe4ff');
+      } else if ((p.seed + Math.floor(scrollY*0.05)) % 3 === 0){
+        pset(x, y, '#ff5a5a');
+      }
+    }
+  } else {                                          // 要塞：導管を流れる光と警告灯
+    for (let i = 0; i < 5; i++){
+      const x = 18 + i*39;
+      const y = Math.round(((scrollY*3/PIXEL + i*54) % (PH+48)) - 24);
+      rct(x, y, 1, 14, '#4fb8ff'); rct(x, y+5, 1, 4, '#d8f4ff');
+    }
+    for (const p of bgSky){
+      const x = Math.round(dot(p.x)), y = Math.round(dot(p.y));
+      if (p.k === 2) pset(x, y, (Math.floor(scrollY*0.08) % 2) ? '#ff5a5a' : '#3a1010');
+      else if (p.k === 0) pset(x, y, (Math.floor(scrollY*0.05 + p.seed) % 4) ? '#1e3050' : '#5fc8ff');
+    }
+  }
+}
+
 function drawBG(idx){
   const TILES = BGTILES[idx];
-  if (TILES) drawBGTiles(TILES);         // 生成した背景タイル
-  else ctx.drawImage(bgBake, 0, 0);      // 焼いておいたグラデーション
+  if (TILES){                            // 生成した背景タイル
+    drawBGTiles(TILES);
+    drawBGOverlay(idx);
+    return;
+  }
+  ctx.drawImage(bgBake, 0, 0);           // 焼いておいたグラデーション
 
   if (idx === 0){                        // ---- 空 ----
     for (const p of bgSky){              // 最遠景：巻雲と鳥の群れ
@@ -1736,20 +1812,6 @@ function drawBG(idx){
         }
     }
   } else if (idx === 2){                 // ---- 峡谷 ----
-    if (TILES){                          // 画像背景のときは動くものだけ重ねる
-      for (const p of bgSky){
-        const x = Math.round(dot(p.x)), y = Math.round(dot(p.y)), s = p.s;
-        if (p.k === 0){ ctx.globalAlpha = 0.5; oval(x, y, 7*s, 2*s, '#3a2410'); ctx.globalAlpha = 1; }
-        else if (p.k === 1){ pset(x, y, '#5c4020'); pset(x+2, y+1, '#432c14'); }
-        else { pset(x, y, '#c2431a'); pset(x, y-1, '#ff9a3b'); }
-      }
-      for (const p of bgFar){            // ちらつく熱気
-        if ((p.seed|0) % 2) continue;
-        const x = Math.round(dot(p.x)), y = Math.round(dot(p.y));
-        if (Math.floor(scrollY*0.1 + x) % 3 === 0) pset(x, y, '#4d2c10');
-      }
-      return;
-    }
     for (const p of bgSky){              // 土煙・小石・溶岩の飛沫
       const x = Math.round(dot(p.x)), y = Math.round(dot(p.y)), s = p.s;
       if (p.k === 0) oval(x, y, 6*s, 2*s, '#2a1a0c');
@@ -2519,8 +2581,10 @@ function render(){
     drawEnding();
   } else {
     drawBG(stageIndex);
-    ctx.fillStyle = 'rgba(0,3,10,' + (STAGES[stageIndex].dim || 0) + ')';
-    ctx.fillRect(0,0,PW,PH);
+    if (!BGTILES[stageIndex]){
+      ctx.fillStyle = 'rgba(0,3,10,' + (STAGES[stageIndex].dim || 0) + ')';
+      ctx.fillRect(0,0,PW,PH);
+    }
     drawItems();
     for (const e of enemies) e.k.draw(e);
     drawBoss();
