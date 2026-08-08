@@ -1633,8 +1633,37 @@ const SEA   = ['#020c16','#04121f','#061929','#082033','#0a273e','#0c2e48','#0e3
 const CANY  = ['#120802','#1b0d05','#241308','#2d190b','#37200e','#412812','#4b3016','#55381a'];
 const CITY  = ['#03050d','#050810','#070b15','#090e1a','#0b111f','#0d1424','#0f1729','#111a2e'];
 
+/* 生成した背景タイル（外部PNG）。読み込めた面だけ画像背景に切り替わり、
+   失敗した面はこれまでどおり手続き的な描画にフォールバックする。 */
+const BGTILES = {};
+function loadBGTiles(idx, name, n){
+  const arr = []; let ok = 0;
+  for (let i = 0; i < n; i++){
+    const im = new Image();
+    im.onload  = () => { if (++ok === n) BGTILES[idx] = arr; };
+    im.onerror = () => {};
+    im.src = 'art/bg/' + name + '-' + i + '.png';
+    arr.push(im);
+  }
+}
+loadBGTiles(2, 'canyon', 3);          // 3面：紅蓮の峡谷
+
+// タイルを縦に敷き詰めてスクロールさせる
+function drawBGTiles(T){
+  const TH = PH, TOTAL = TH * T.length;
+  let off = dot(scrollY) % TOTAL;
+  if (off < 0) off += TOTAL;
+  for (let rep = 0; rep < 2; rep++)
+    for (let k = 0; k < T.length; k++){
+      const y = Math.round(off - TOTAL + rep*TOTAL + k*TH);
+      if (y > -TH && y < PH) ctx.drawImage(T[k], 0, y);
+    }
+}
+
 function drawBG(idx){
-  ctx.drawImage(bgBake, 0, 0);           // 焼いておいたグラデーション
+  const TILES = BGTILES[idx];
+  if (TILES) drawBGTiles(TILES);         // 生成した背景タイル
+  else ctx.drawImage(bgBake, 0, 0);      // 焼いておいたグラデーション
 
   if (idx === 0){                        // ---- 空 ----
     for (const p of bgSky){              // 最遠景：巻雲と鳥の群れ
@@ -1707,6 +1736,20 @@ function drawBG(idx){
         }
     }
   } else if (idx === 2){                 // ---- 峡谷 ----
+    if (TILES){                          // 画像背景のときは動くものだけ重ねる
+      for (const p of bgSky){
+        const x = Math.round(dot(p.x)), y = Math.round(dot(p.y)), s = p.s;
+        if (p.k === 0){ ctx.globalAlpha = 0.5; oval(x, y, 7*s, 2*s, '#3a2410'); ctx.globalAlpha = 1; }
+        else if (p.k === 1){ pset(x, y, '#5c4020'); pset(x+2, y+1, '#432c14'); }
+        else { pset(x, y, '#c2431a'); pset(x, y-1, '#ff9a3b'); }
+      }
+      for (const p of bgFar){            // ちらつく熱気
+        if ((p.seed|0) % 2) continue;
+        const x = Math.round(dot(p.x)), y = Math.round(dot(p.y));
+        if (Math.floor(scrollY*0.1 + x) % 3 === 0) pset(x, y, '#4d2c10');
+      }
+      return;
+    }
     for (const p of bgSky){              // 土煙・小石・溶岩の飛沫
       const x = Math.round(dot(p.x)), y = Math.round(dot(p.y)), s = p.s;
       if (p.k === 0) oval(x, y, 6*s, 2*s, '#2a1a0c');
